@@ -8,6 +8,7 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
+
 BASE_DIR = Path("/Users/emmasorheim/d2_data")
 STORES = ["library_cafe", "science_building", "student_union"]
 REGISTERS = ["POS_01", "POS_02", "POS_03"]
@@ -100,4 +101,4 @@ def create_dataset():
 
 
 if __name__ == "__main__":
-    create_dataset()
+    run_sales_pipeline("/Users/emmasorheim/d2_data")
