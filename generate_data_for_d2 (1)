@@ -1,104 +1,381 @@
 """
-Dataset Generator for Campus Coffee Shop Assignment.
-Creates nested folders, mixed encoding logs, and nested config JSON.
+OPG 1
 """
 
-import json
-import random
-from datetime import datetime, timedelta
 from pathlib import Path
+import re
+import json
+import numpy as np
+import pandas as pd
 
-
-BASE_DIR = Path("/Users/emmasorheim/d2_data")
-STORES = ["library_cafe", "science_building", "student_union"]
-REGISTERS = ["POS_01", "POS_02", "POS_03"]
-CURRENCIES = ["EUR", "NOK", "USD"]
-ITEMS = [
-    ("Espresso", 3.00),
-    ("Latte", 4.50),
-    ("Cappuccino", 4.20),
-    ("Muffin", 3.50),
-    ("Croissant", 3.80),
-    ("Sandwich", 7.50),
-]
-STATUSES = ["SUCCESS", "SUCCESS", "SUCCESS", "SUCCESS", "REFUND", "CANCELLED"]
-
-NOISE_LINES = [
-    "--- PRINTER PAPER LOW ---",
-    "[DEBUG] BARCODE SCANNER REBOOTED",
-    "=== NETWORK SYNC OK ===",
-]
-
-
-def generate_log_line(ts: datetime, reg_id: str) -> str:
-    item_name, base_price = random.choice(ITEMS)
-    currency = random.choice(CURRENCIES)
-
-    price = 999.00 if random.random() < 0.03 else round(base_price + random.uniform(-0.5, 0.5), 2)
-    status = random.choice(STATUSES)
-    ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
-
-    return f"[{ts_str}] [{reg_id}] item={item_name} price={price:.2f} {currency} ({status})\n"
-
-
-def create_dataset():
-    start_time = datetime(2026, 10, 15, 7, 0, 0)
-    file_idx = 0
-
-    for store in STORES:
-        for reg in REGISTERS:
-            folder = BASE_DIR / "2026" / store / reg
-            folder.mkdir(parents=True, exist_ok=True)
-
-            log_file = folder / "register_sales.log"
-            encoding = "utf-8" if file_idx % 2 == 0 else "iso-8859-1"
+# 1.1 
+def read_file_robustly(file_path: str | Path) -> tuple[str, str]:
+    path = Path(file_path)
+    encodings = ['utf-8', 'iso-8859-1']
+    
+    for encoding in encodings:
+        try:
+            content = path.read_text(encoding=encoding)
+            return content, encoding
+        except UnicodeDecodeError:
+            continue
             
-            lines = []
-            current_time = start_time
+    raise UnicodeDecodeError(f"Klarte ikke å dekode filen {path} med noen av de støttede kodingene.")
 
-            for _ in range(80):
-                current_time += timedelta(seconds=random.randint(10, 180))
-                if random.random() < 0.15:
-                    lines.append(random.choice(NOISE_LINES) + "\n")
-                lines.append(generate_log_line(current_time, reg))
-
-            with open(log_file, "w", encoding=encoding) as f:
-                f.writelines(lines)
-
-            file_idx += 1
-            print(f"Generated: {log_file} [{encoding.upper()}]")
-
-    # Generate nested JSON config
-    config = {
-        "company": "Campus Coffee",
-        "regions": [
-            {
-                "region_name": "Main Campus",
-                "stores": [
-                    {
-                        "name": "Library Cafe",
-                        "registers": [
-                            {"id": "POS_01", "active": True},
-                            {"id": "POS_02", "active": True},
-                        ],
-                    },
-                    {
-                        "name": "Science Building",
-                        "registers": [
-                            {"id": "POS_03", "active": True},
-                            {"id": "POS_04", "active": False},
-                        ],
-                    },
-                ],
-            }
-        ],
-    }
-
-    with open(BASE_DIR / "store_config.json", "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-
-    print("\nDataset generation complete!")
+# 1.2. 
+def parse_sales_log(file_content: str) -> list[dict]:
+    pattern = re.compile(
+        r'^\[(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+'
+        r'\[(?P<register_id>[A-Za-z0-9_]+)\]\s+'
+        r'item=(?P<item>.+?)\s+'
+        r'price=(?P<price>[\d.]+)\s+'
+        r'(?P<currency>[A-Z]{3})\s+'
+        r'\((?P<status>SUCCESS\vert{}REFUND\vert{}CANCELLED)\)$'
+    )
+    
+    transactions = []
+    
+    for line in file_content.splitlines():
+        line = line.strip()
+        match = pattern.match(line)
+        if match:
+            record = match.groupdict()
+            record['price'] = float(record['price'])
+            transactions.append(record)
+            
+    return transactions
 
 
-if __name__ == "__main__":
-    run_sales_pipeline("/Users/emmasorheim/d2_data")
+
+file_path = "/Users/emmasorheim/register_sales.log"
+
+try:
+    
+    content, encoding_used = read_file_robustly(file_path)
+    print(f"Filen ble lest vellykket med koding: {encoding_used}\n")
+    
+    valid_transactions = parse_sales_log(content)
+    
+    print(f"Fant {len(valid_transactions)} gyldige transaksjoner:")
+    for tx in valid_transactions:
+        print(tx)
+        
+except FileNotFoundError:
+    print(f"Fant ikke filen på stien: {file_path}. Sjekk at filen har blitt opprettet der.")
+
+
+
+
+
+
+
+
+"""
+OPG 2 & 3
+#Oppgave 2.1
+
+def find_log_files(dir_path: Path) -> list[Path]:
+    """
+    Finner alle .log-filer i en mappestruktur ved hjelp av
+    rekursjon og Path.iterdir().
+    """
+
+    log_files = []
+
+    for item in dir_path.iterdir():
+
+        # Hvis elementet er en mappe, søk videre rekursivt
+        if item.is_dir():
+            log_files.extend(find_log_files(item))
+
+        # Hvis elementet er en .log-fil, legg den til i listen
+        elif item.is_file() and item.suffix == ".log":
+            log_files.append(item)
+
+    return log_files
+
+# Tester koden
+log_files = find_log_files(Path("."))
+print("Loggfiler:")
+print(log_files)
+
+
+#Oppgave 2.2
+
+def get_active_registers(data) -> set[str]:
+    """
+    Traverserer en nøstet JSON-struktur rekursivt og returnerer
+    et sett med ID-er for alle aktive registre.
+    """
+
+    active_registers = set()
+
+    # Hvis data er et dictionary
+    if isinstance(data, dict):
+
+        # Sjekk om dette er en register-node
+        if "id" in data and "active" in data:
+            if data["active"] is True:
+                active_registers.add(data["id"])
+
+        #Itererer gjennom alle verdier rekursivt
+        for value in data.values():
+            active_registers.update(get_active_registers(value))
+
+    #Hvis data er en liste
+    elif isinstance(data, list):
+
+        #Itererer gjennom hvert element rekursivt
+        for item in data:
+            active_registers.update(get_active_registers(item))
+
+    return active_registers
+
+#tester koden
+test_data = {
+    "registers": [
+        {"id": "A1", "active": True},
+        {"id": "A2", "active": False},
+        {
+            "group": [
+                {"id": "A3", "active": True}
+            ]
+        }
+    ]
+}
+
+print("Aktive registre:")
+print(get_active_registers(test_data))
+
+#Oppgave.3.1
+
+def clean_price_outliers(prices: list[float]) -> np.ndarray:
+    """
+    Fjerner ekstreme prisverdier (outliers) ved hjelp av
+    NumPy. Verdier mer enn 3 standardavvik fra gjennomsnittet
+    erstattes med medianen.
+    """
+
+    arr = np.array(prices, dtype=np.float64)
+
+    #Beregn statistikk
+    mean_val = np.mean(arr)
+    std_val = np.std(arr)
+    median_val = np.median(arr)
+
+    #Finn outliers
+    outliers = np.abs(arr - mean_val) > (3 * std_val)
+
+    #Erstatt outliers med medianen
+    arr[outliers] = median_val
+
+    return arr
+#tester koden
+
+prices = [20, 25, 22, 24, 999]
+
+print("Rensede priser:")
+print(clean_price_outliers(prices))
+
+#Oppgave 3.2
+def compute_refund_ratio(
+    sales_count: np.ndarray,
+    refund_count: np.ndarray
+) -> np.ndarray:
+    """
+    Beregner refusjonsforhold (refund ratio) elementvis.
+    Hindrer divisjon på null ved hjelp av et lite epsilon.
+    """
+
+    epsilon = 1e-6
+
+    return refund_count / (sales_count + epsilon)
+
+#tester koden
+sales_count = np.array([100, 50, 0, 25])
+refund_count = np.array([5, 2, 1, 3])
+
+print("Refund ratio:")
+print(compute_refund_ratio(sales_count, refund_count))
+"""
+
+def find_log_files(root_dir: str | Path) -> list[Path]:
+    root = Path(root_dir)
+    log_files = []
+    
+    for item in root.iterdir():
+        if item.is_dir():
+            log_files.extend(find_log_files(item))
+        elif item.is_file() and item.suffix == '.log':
+            log_files.append(item)
+            
+    return log_files
+
+def extract_active_registers(config_path: str | Path) -> set[str]:
+    path = Path(config_path)
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+        
+    active_registers = set()
+    
+    def _recurse(node):
+        if isinstance(node, dict):
+            if node.get("active") is True and "id" in node:
+                active_registers.add(node["id"])
+            for value in node.values():
+                _recurse(value)
+        elif isinstance(node, list):
+            for item in node:
+                _recurse(item)
+                
+    _recurse(data)
+    return active_registers
+
+def clean_price_outliers(prices: np.ndarray) -> np.ndarray:
+    mean = np.mean(prices)
+    std = np.std(prices)
+    
+    outlier_mask = (np.abs(prices - mean) > 3 * std) | (prices == 999.00)
+    
+    if np.any(outlier_mask):
+        valid_median = np.median(prices[~outlier_mask])
+        prices[outlier_mask] = valid_median
+        
+    return prices
+
+def compute_refund_ratio(sales_count: np.ndarray, refund_count: np.ndarray) -> np.ndarray:
+    epsilon = 1e-6
+    return refund_count / (sales_count + epsilon)
+
+
+""" 
+OPG 4
+"""
+    
+#4.1
+def create_sales_dataframe(transactions: list[dict]) -> pd.DataFrame:
+    df = pd.DataFrame(transactions)
+    if df.empty:
+        return df
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df.set_index('timestamp', inplace=True)
+    df.sort_index(inplace=True)
+    return df
+
+#4.2
+def resample_sales_by_item(df: pd.DataFrame) -> pd.DataFrame:
+    resampled_df = df.groupby('item').resample('1h')['price'].sum()
+    return resampled_df
+
+#4.3
+def create_revenue_pivot_table(df: pd.DataFrame) -> pd.DataFrame:
+    pivot_table = pd.pivot_table(
+        df,
+        values='price',
+        index='item',
+        columns='status',
+        aggfunc='sum',
+        fill_value=0.0
+    )
+    return pivot_table
+
+#4.4
+def calculate_refund_ratio_from_pivot(df: pd.DataFrame) -> pd.Series:
+    status_counts = pd.pivot_table(
+        df,
+        values='price',
+        index='item',
+        columns='status',
+        aggfunc='count',
+        fill_value=0
+    )
+    
+    refunds = status_counts['REFUND'].to_numpy(dtype=float) if 'REFUND' in status_counts.columns else np.zeros(len(status_counts))
+    success = status_counts['SUCCESS'].to_numpy(dtype=float) if 'SUCCESS' in status_counts.columns else np.zeros(len(status_counts))
+    cancelled = status_counts['CANCELLED'].to_numpy(dtype=float) if 'CANCELLED' in status_counts.columns else np.zeros(len(status_counts))
+    
+    total_sales = refunds + success + cancelled
+    ratios = compute_refund_ratio(total_sales, refunds)
+    
+    return pd.Series(ratios, index=status_counts.index, name='refund_ratio')
+
+#opg4 run
+df_sales = create_sales_dataframe(valid_transactions) if 'valid_transactions' in locals() else pd.DataFrame()
+
+if not df_sales.empty:
+    hourly_sales = resample_sales_by_item(df_sales)
+    print("--- 1-times resample ---")
+    print(hourly_sales.head())
+
+    revenue_pivot = create_revenue_pivot_table(df_sales)
+    print("\n--- Pivot-tabell (Omsetning) ---")
+    print(revenue_pivot)
+
+    ratios = calculate_refund_ratio_from_pivot(df_sales)
+    print("\n--- Refusjonsrate per vare ---")
+    print(ratios)
+
+
+""" 
+OPG 5
+"""
+
+def run_sales_pipeline(base_dir: str | Path) -> None:
+    base_path = Path(base_dir)
+    
+    print("--- STEG 1: Rekursivt søk og konfigurasjon ---")
+    log_files = find_log_files(base_path)
+    print(f"Fant {len(log_files)} loggfiler.")
+    
+    config_path = base_path / "store_config.json"
+    if config_path.exists():
+        active_regs = extract_active_registers(config_path)
+        print(f"Aktive register-IDer funnet i config: {active_regs}")
+    else:
+        active_regs = set()
+        print("Advarsel: store_config.json ikke funnet.")
+
+    print("\n--- STEG 2 & 3: Ingest, parsing og DataFrame-bygging ---")
+    all_transactions = []
+    for log_file in log_files:
+        content, _ = read_file_robustly(log_file)
+        txs = parse_sales_log(content)
+        all_transactions.extend(txs)
+        
+    df = create_sales_dataframe(all_transactions)
+    if df.empty:
+        print("Ingen transaksjoner funnet!")
+        return
+        
+    print(f"Bygget DataFrame med {len(df)} rader.")
+
+    print("\n--- STEG 4: NumPy Outlier-rensming ---")
+    prices_array = df['price'].to_numpy(dtype=float)
+    cleaned_prices = clean_price_outliers(prices_array)
+    df['price'] = cleaned_prices
+
+    print("\n--- STEG 5: Valutakorrigering (NOK) ---")
+    currency_factor = 10.0
+    df.loc[df['currency'] == 'NOK', 'price'] *= currency_factor
+
+    print("\n--- STEG 6: Generere rapporter, pivot-tabeller og refusjonsrater ---")
+    resampled_df = resample_sales_by_item(df)
+    pivot_table = create_revenue_pivot_table(df)
+    refund_ratios = calculate_refund_ratio_from_pivot(df)
+    
+    report_summary = pd.DataFrame({
+        'Total_Revenue': pivot_table.sum(axis=1),
+        'Refund_Ratio': refund_ratios
+    })
+    
+    print("\n--- Sammendragsrapport ---")
+    print(report_summary)
+
+    print("\n--- STEG 7: Lagre output-filer ---")
+    output_dir = base_path / "output"
+    output_dir.mkdir(exist_ok=True)
+    
+    df.to_csv(output_dir / "cleaned_transactions.csv")
+    resampled_df.reset_index().to_json(output_dir / "hourly_revenue.json", orient='records', date_format='iso')
+    pivot_table.to_csv(output_dir / "status_pivot_table.csv")
+    refund_
