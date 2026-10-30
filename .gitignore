@@ -218,6 +218,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-git log --graph --pretty=format:"%h - %an, %ar : %s" >
-git_log.txt
